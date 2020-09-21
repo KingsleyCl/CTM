@@ -4,30 +4,29 @@ import numpy as np
 
 class node:
     def __init__(self, i, o, sp, si=None):
-        self.in_link = tuple(i)
-        self.out_link = tuple(o)
-        self.split = tuple(tuple(sp[k * len(o):(k + 1) * len(o)]) for k in range(len(i)))
-        self.signal = si
-        self.SplitSend = np.zeros((len(self.InLink), len(self.OutLink, TotalTimeStep)))
+        self.InLink = tuple(i)
+        self.OutLink = tuple(o)
+        self.Split = np.array(sp).reshape((len(1), len(o)))
+        self.Signal = si
 
 
 class signal:
-    def __init__(self, node, cycle, off, se, res):
-        self.cycle = cycle
-        self.offset = off
-        self.stage_end = se
-        self.restricted = res
+    def __init__(self, cyc, off, se, res):
+        self.Cycle = cyc
+        self.Offset = off
+        self.StageEnd = se
+        self.Restricted = res
 
 
 class link:
     def __init__(self, fr, to, len, v, sf, kj, dem):
-        self.fr_node = fr
-        self.to_node = to
-        self.length = len
-        self.v = v
-        self.sat_flow = sf
+        self.FrNode = fr
+        self.ToNode = to
+        self.Length = len
+        self.V = v
+        self.SatFlow = sf
         self.kjam = kj
-        self.demand = dem
+        self.Demand = dem
 
 
 def config(folder):
