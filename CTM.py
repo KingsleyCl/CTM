@@ -13,6 +13,7 @@ pho(i,t)    - density [veh/mile] in cell i by the end of time interval t
 Initialize matrics
 '''
 import numpy as np
+from copy import deepcopy
 import UrbanStreet as us
 
 
@@ -51,7 +52,7 @@ def CTM(control, Link, Node, dt, TotalTimeStep):
             for j in range(len(Node[n].OutLink)):
                 A = np.array(TotalSend[Node[n].InLink[0], t])
                 for i in range(1, len(Node[n].InLink)):
-                    A = np.hstack([A, TotalSend[Node[n].InLink[i], t]])
+                    A = np.vstack([A, TotalSend[Node[n].InLink[i], t]])
                 TotalReceive[Node[n].OutLink[j], t] = A.dot(Node[n].Split[:, j].reshape(-1, 1))
 
         # Calculate 'available space' at downstream
@@ -105,7 +106,7 @@ def CTM(control, Link, Node, dt, TotalTimeStep):
             for j in range(len(Node[n].OutLink)):
                 A = np.array(TotalSend[Node[n].InLink[0], t])
                 for i in range(1, len(Node[n].InLink)):
-                    A = np.hstack([A, TotalSend[Node[n].InLink[i], t]])
+                    A = np.vstack([A, TotalSend[Node[n].InLink[i], t]])
                 Inflow[Node[n].OutLink[j], t] = A.dot(Node[n].Split[:, j].reshape(-1, 1))
 
         for j in range(len(Link)):
@@ -123,27 +124,27 @@ def CTM(control, Link, Node, dt, TotalTimeStep):
         return Inflow, Outflow, pho
 
 
-def Slice(Link, Node, SignalControl, dt):
+def Slice(Link, Node, dt):  # , SignalControl
     '''A subroutine to slice links into smaller segments'''
 
     MaxNumCell = 50       # default maximum number of sub-cells
 
     OriginalNumLink = len(Link)
     for i in range(OriginalNumLink):
-        if Link[i].FrNode > 0 and Link[i].ToNode > 0:
+        if Link[i].FrNode >= 0 and Link[i].ToNode >= 0:
             # condition: length of sub-cell has to be greater than distance
             # travelled by free-flow speed times delta_t
-            NumCell = min(MaxNumCell, Link[i].Length / (Link[i].V * dt / 3600))
+            NumCell = min(MaxNumCell, round(Link[i].Length / (Link[i].V * dt / 3600)))
 
             Node.extend([us.node(i=[len(Link) + k], o=[len(Link) + k + 1], sp=[1]) for k in range(NumCell)])
 
             for k in range(NumCell, -1, -1):
-                Link.append(Link[i].deepcopy())
+                Link.append(deepcopy(Link[i]))
                 Link[-1].FrNode, Link[-1].ToNode = len(Node) - k - 1, len(Node) - k
             Link[OriginalNumLink].FrNode = Link[i].FrNode
             Link[-1].ToNode = Link[i].ToNode
 
             # Modify the controller and node settings accordingly:
             Node[Link[i].ToNode].InLink[Node[Link[i].ToNode].InLink.index(i)] = len(Link) - 1
-            SignalControl[Link[i].ToNode].Restricted[np.argwhere(SignalControl[Link[i].ToNode].Restricted == i)] = len(Link) - 1
+            # SignalControl[Link[i].ToNode].Restricted[np.argwhere(SignalControl[Link[i].ToNode].Restricted == i)] = len(Link) - 1
             Node[Link[i].FrNode].OutLink[Node[Link[i].FrNode].OutLink.index(i)] = OriginalNumLink

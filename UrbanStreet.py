@@ -10,11 +10,12 @@ class node:
 
 
 class signal:
-    def __init__(self, cyc, off, se, res):
-        self.Cycle = cyc
+    def __init__(self, n, off, res, gs):
+        self.Node = n
         self.Offset = off
-        self.StageEnd = np.array(se).reshape(-1, 1)
         self.Restricted = np.array(res).reshape(-1, 1)
+        self.GreenSplit = np.array(gs).reshape(-1, len(res))
+        # self.Condition
 
 
 class link:
