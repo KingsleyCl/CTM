@@ -3,8 +3,8 @@ import numpy as np
 
 class node:
     def __init__(self, i, o, sp, si=None):
-        self.InLink = tuple(i)
-        self.OutLink = tuple(o)
+        self.InLink = list(i)
+        self.OutLink = list(o)
         self.Split = np.array(sp).reshape((len(i), len(o)))
         self.Signal = si
 
@@ -13,8 +13,8 @@ class signal:
     def __init__(self, cyc, off, se, res):
         self.Cycle = cyc
         self.Offset = off
-        self.StageEnd = np.array(se).reshape(1, 2)
-        self.Restricted = np.array(res).reshape(1, 2)
+        self.StageEnd = np.array(se).reshape(-1, 1)
+        self.Restricted = np.array(res).reshape(-1, 1)
 
 
 class link:

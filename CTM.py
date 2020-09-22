@@ -12,7 +12,6 @@ pho(i,t)    - density [veh/mile] in cell i by the end of time interval t
 
 Initialize matrics
 '''
-
 import numpy as np
 import UrbanStreet as us
 
@@ -114,11 +113,8 @@ def CTM(control, Link, Node, dt, TotalTimeStep):
                 # demand profile resolution: 15-min
                 # assume demand is normally distributed with variance = 10% of
                 # mean
-                if t // 900 >= len(Link[j].Demand):
-                    Inflow[j, t] = Link[j].Demand[-1] + np.sqrt(0.1 * Link[j].Demand[-1]) * np.random.randn(1)
-                else:
-                    Inflow[j, t] = Link[j].Demand[t // 900] + np.sqrt(0.1 * Link[j].Demand[t // 900]) * np.random.randn(1)
-                Inflow[j, t] = max(Inflow[j, t], 0)
+                k = min(t // 900, len(Link[j].Demand) - 1)
+                Inflow[j, t] = max(Link[j].Demand[k] + np.sqrt(0.1 * Link[j].Demand[k]) * np.random.randn(1), 0)
 
         # Update density (Eqn 10 in Kurzhanski et al.)
         for i in range(len(Link)):
@@ -127,11 +123,27 @@ def CTM(control, Link, Node, dt, TotalTimeStep):
         return Inflow, Outflow, pho
 
 
-if __name__ == '__main__':
-    Node = [us.node([0, 2], [1, 3], [0.7, 0.3] * 2, us.signal(120, 0, [60, 120], [5, 1]))]
-    Link = [us.link(-1, 1, 0.01, 30, 1800, 230, [700, 850, 700, 0]),
-            us.link(1, 2, 0.1, 30, 1800, 230, [0]),
-            us.link(-1, 1, 0.01, 30, 1800, 230, [450, 300, 200, 0]),
-            us.link(1, -1, 0.01, 30, 1800, 230, [0])]
-    Inflow, Outflow, pho = CTM(np.array([1] * len(Link) * 3000).reshape(len(Link), -1), Link, Node, 1, 3000)
-    np.savetxt('result.csv', np.around(Inflow), delimiter=',')
+def Slice(Link, Node, SignalControl, dt):
+    '''A subroutine to slice links into smaller segments'''
+
+    MaxNumCell = 50       # default maximum number of sub-cells
+
+    OriginalNumLink = len(Link)
+    for i in range(OriginalNumLink):
+        if Link[i].FrNode > 0 and Link[i].ToNode > 0:
+            # condition: length of sub-cell has to be greater than distance
+            # travelled by free-flow speed times delta_t
+            NumCell = min(MaxNumCell, Link[i].Length / (Link[i].V * dt / 3600))
+
+            Node.extend([us.node(i=[len(Link) + k], o=[len(Link) + k + 1], sp=[1]) for k in range(NumCell)])
+
+            for k in range(NumCell, -1, -1):
+                Link.append(Link[i].deepcopy())
+                Link[-1].FrNode, Link[-1].ToNode = len(Node) - k - 1, len(Node) - k
+            Link[OriginalNumLink].FrNode = Link[i].FrNode
+            Link[-1].ToNode = Link[i].ToNode
+
+            # Modify the controller and node settings accordingly:
+            Node[Link[i].ToNode].InLink[Node[Link[i].ToNode].InLink.index(i)] = len(Link) - 1
+            SignalControl[Link[i].ToNode].Restricted[np.argwhere(SignalControl[Link[i].ToNode].Restricted == i)] = len(Link) - 1
+            Node[Link[i].FrNode].OutLink[Node[Link[i].FrNode].OutLink.index(i)] = OriginalNumLink
