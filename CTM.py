@@ -17,7 +17,7 @@ from copy import deepcopy
 import UrbanStreet as us
 
 
-def CTM(control, Link, Node, dt, TotalTimeStep):
+def CTM(Control, Link, Node, dt, TotalTimeStep):
     Inflow = np.zeros((len(Link), TotalTimeStep))
     Outflow = np.zeros((len(Link), TotalTimeStep))
     pho = np.zeros((len(Link), TotalTimeStep))
@@ -33,11 +33,11 @@ def CTM(control, Link, Node, dt, TotalTimeStep):
 
     TuneRatio = np.zeros((len(Link), TotalTimeStep))
 
-    for t in range(TotalTimeStep):
+    for t in range(TotalTimeStep - 1):
         # Calculate 'outflow' from each cell without restriction
         # (Step 1 in Kurzhanskiy et al., Eqn 2)
         for i in range(len(Link)):
-            TotalSend[i, t] = min(Link[i].V * pho[i, t], Link[i].SatFlow * control[i, t])
+            TotalSend[i, t] = min(Link[i].V * pho[i, t], Link[i].SatFlow * Control[i, t])
 
         # Calculate the splitted outflow from each cell without restriction
         # (Step 2 in Kurzhanskiy et al., Eqn 3)
@@ -50,10 +50,10 @@ def CTM(control, Link, Node, dt, TotalTimeStep):
         # (Step 2 in Kurzhanskiy et al., Eqn 4)
         for n in range(len(Node)):
             for j in range(len(Node[n].OutLink)):
-                A = np.array(TotalSend[Node[n].InLink[0], t])
+                A = np.array([TotalSend[Node[n].InLink[0], t]])
                 for i in range(1, len(Node[n].InLink)):
                     A = np.vstack([A, TotalSend[Node[n].InLink[i], t]])
-                TotalReceive[Node[n].OutLink[j], t] = A.dot(Node[n].Split[:, j].reshape(-1, 1))
+                TotalReceive[Node[n].OutLink[j], t] = A.reshape(1, -1).dot(Node[n].Split[:, j])
 
         # Calculate 'available space' at downstream
         # (Step 3 in Kurzhanskiy et al., Eqn 5)
@@ -76,7 +76,7 @@ def CTM(control, Link, Node, dt, TotalTimeStep):
                 AdjustTotalSend[Node[n].InLink[i], t] = sum(AdjustSplitSend[n][i, :, t])
 
         for i in range(len(Link)):
-            if Link[i].ToNode < 0:
+            if Link[i].ToNode is None:
                 # recognized as a sink (i.e. no restraint downstream)
                 AdjustTotalSend[i, t] = TotalSend[i, t]
 
@@ -87,7 +87,7 @@ def CTM(control, Link, Node, dt, TotalTimeStep):
                 TuneRatio[Node[n].InLink[i], t] = np.inf
                 for j in range(len(Node[n].OutLink)):
                     if AdjustTotalSend[Node[n].InLink[i], t] * Node[n].Split[i, j] > 0:
-                        r = AdjustSplitSend[n][i, j, t] / (AdjustTotalSend[Node[n].InLink(i), t] * Node[n].Split[i, j])
+                        r = AdjustSplitSend[n][i, j, t] / (AdjustTotalSend[Node[n].InLink[i], t] * Node[n].Split[i, j])
                     else:
                         r = 1
                     if r < TuneRatio[Node[n].InLink[i], t]:
@@ -96,7 +96,7 @@ def CTM(control, Link, Node, dt, TotalTimeStep):
         # Calculate final outflow from each cell
         # (Step 5 in Kurzhanskiy et al., Eqn 8)
         for i in range(len(Link)):
-            if Link[i].ToNode < 0:
+            if Link[i].ToNode is None:
                 TuneRatio[i, t] = 1
             Outflow[i, t] = AdjustTotalSend[i, t] * TuneRatio[i, t]
 
@@ -104,13 +104,13 @@ def CTM(control, Link, Node, dt, TotalTimeStep):
         # (Step 6 in Kurzhanskiy et al., Eqn 9)
         for n in range(len(Node)):
             for j in range(len(Node[n].OutLink)):
-                A = np.array(TotalSend[Node[n].InLink[0], t])
+                A = np.array([TotalSend[Node[n].InLink[0], t]])
                 for i in range(1, len(Node[n].InLink)):
                     A = np.vstack([A, TotalSend[Node[n].InLink[i], t]])
-                Inflow[Node[n].OutLink[j], t] = A.dot(Node[n].Split[:, j].reshape(-1, 1))
+                Inflow[Node[n].OutLink[j], t] = A.reshape(1, -1).dot(Node[n].Split[:, j])
 
         for j in range(len(Link)):
-            if Link[j].FrNode < 0:
+            if Link[j].FrNode is None:
                 # demand profile resolution: 15-min
                 # assume demand is normally distributed with variance = 10% of
                 # mean
@@ -121,7 +121,7 @@ def CTM(control, Link, Node, dt, TotalTimeStep):
         for i in range(len(Link)):
             pho[i, t + 1] = pho[i, t] + (Inflow[i, t] - Outflow[i, t]) * (dt / 3600) / Link[i].Length
 
-        return Inflow, Outflow, pho
+    return Inflow, Outflow, pho
 
 
 def Slice(Link, Node, dt):  # , SignalControl
@@ -131,12 +131,12 @@ def Slice(Link, Node, dt):  # , SignalControl
 
     OriginalNumLink = len(Link)
     for i in range(OriginalNumLink):
-        if Link[i].FrNode >= 0 and Link[i].ToNode >= 0:
+        if Link[i].FrNode and Link[i].ToNode:
             # condition: length of sub-cell has to be greater than distance
             # travelled by free-flow speed times delta_t
             NumCell = min(MaxNumCell, round(Link[i].Length / (Link[i].V * dt / 3600)))
 
-            Node.extend([us.node(i=[len(Link) + k], o=[len(Link) + k + 1], sp=[1]) for k in range(NumCell)])
+            Node.extend([us.node(InLink=[len(Link) + k], OutLink=[len(Link) + k + 1], Split=[1]) for k in range(NumCell)])
 
             for k in range(NumCell, -1, -1):
                 Link.append(deepcopy(Link[i]))
@@ -144,7 +144,8 @@ def Slice(Link, Node, dt):  # , SignalControl
             Link[OriginalNumLink].FrNode = Link[i].FrNode
             Link[-1].ToNode = Link[i].ToNode
 
-            # Modify the controller and node settings accordingly:
-            Node[Link[i].ToNode].InLink[Node[Link[i].ToNode].InLink.index(i)] = len(Link) - 1
-            # SignalControl[Link[i].ToNode].Restricted[np.argwhere(SignalControl[Link[i].ToNode].Restricted == i)] = len(Link) - 1
-            Node[Link[i].FrNode].OutLink[Node[Link[i].FrNode].OutLink.index(i)] = OriginalNumLink
+            # Modify the Controller and node settings accordingly:
+            LinkTmp = Node[Link[i].ToNode].InLink
+            LinkTmp[np.where(LinkTmp == i)] = len(Link) - 1
+            LinkTmp = Node[Link[i].FrNode].OutLink
+            LinkTmp[np.where(LinkTmp == i)] = OriginalNumLink

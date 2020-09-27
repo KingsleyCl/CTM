@@ -1,15 +1,23 @@
 import UrbanStreet as us
+from ControlVector import ControlVector_Webster
 from CTM import CTM, Slice
 import numpy as np
+import matplotlib.pyplot as plt
 
-# , us.signal(120, 0, [60, 120], [5, 1]), us.signal(120, 0, [60, 120], [7, 2])
-Node = [us.node([0], [1], [1]),
-        us.node([1], [2], [1])]
-Link = [us.link(-1, 0, 0.01, 30, 1800, 230, [700, 850, 700, 0]),
-        us.link(0, 1, 0.1, 30, 1800, 230, [0]),
-        us.link(1, -1, 0.01, 30, 1800, 230, [450, 300, 200, 0])]
-        # , us.link(1, -1, 0.01, 30, 1800, 230, [0])
+Time_SignalPeriod = [900, 1800, 900]
+TotalTimeStep = sum(Time_SignalPeriod)
+LostTime = 5
+
+Node, Link, Signal = us.config('urban data')
 Slice(Link, Node, 1)
-Inflow, Outflow, pho = CTM(np.array([1] * len(Link) * 3000).reshape(len(Link), -1), Link, Node, 1, 3000)
-np.savetxt('result.csv', np.around(pho), delimiter=',')
-print(pho)
+
+Control = ControlVector_Webster(len(Link), Signal, TotalTimeStep, Time_SignalPeriod, LostTime)
+Inflow, Outflow, pho = CTM(Control, Link, Node, 1, TotalTimeStep)
+np.savetxt('pho.csv', pho, delimiter=',', fmt='%f')
+
+# pho = np.loadtxt('pho.csv', delimiter=',')
+# X, Y = np.meshgrid(np.arange(300, 601), np.arange(1 / 120, 1 + 1 / 120, 1 / 120))
+# plt.contourf(X, Y, pho[16:136, 300:601], cmap=plt.cm.Spectral, alpha=0.8)
+X, Y = np.meshgrid(np.arange(pho.shape[1]), np.arange(pho.shape[0]))
+plt.contourf(X, Y, pho, cmap=plt.cm.Spectral, alpha=0.8)
+plt.show()
