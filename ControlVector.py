@@ -21,7 +21,7 @@ def ControlVector_Webster(LenLink, SignalControl, TotalTimeStep, Time_SignalPeri
             Cycle[sig.GreenSplit[j, 0] + LostTime:sig.GreenSplit[j, 0] + LostTime + sig.GreenSplit[j, 1], 1] = 1  # Second stage with green
 
             # Add the thread in the head of signal as offsets
-            OffSetSignal = Cycle[-sig.Offset:]
+            OffSetSignal = Cycle[-sig.Offset % CycleTime:]
 
             CycleNum = Time_SignalPeriod[j] // CycleTime + 1  # Calculate the number of cycles
 
@@ -36,4 +36,5 @@ def ControlVector_Webster(LenLink, SignalControl, TotalTimeStep, Time_SignalPeri
         Control[sig.Restricted[0], :] = ControlVector[:, 0]
         Control[sig.Restricted[1], :] = ControlVector[:, 1]
 
+    # np.savetxt('control.csv', Control, fmt='%d', delimiter=',')
     return Control

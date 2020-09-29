@@ -9,7 +9,7 @@ TotalTimeStep = sum(Time_SignalPeriod)
 LostTime = 5
 
 Node, Link, Signal = us.config('urban data')
-Slice(Link, Node, 1)
+Slice(Link, Node, Signal, 1)
 
 Control = ControlVector_Webster(len(Link), Signal, TotalTimeStep, Time_SignalPeriod, LostTime)
 Inflow, Outflow, pho = CTM(Control, Link, Node, 1, TotalTimeStep)

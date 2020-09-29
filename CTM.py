@@ -52,8 +52,8 @@ def CTM(Control, Link, Node, dt, TotalTimeStep):
             for j in range(len(Node[n].OutLink)):
                 A = np.array([TotalSend[Node[n].InLink[0], t]])
                 for i in range(1, len(Node[n].InLink)):
-                    A = np.vstack([A, TotalSend[Node[n].InLink[i], t]])
-                TotalReceive[Node[n].OutLink[j], t] = A.reshape(1, -1).dot(Node[n].Split[:, j])
+                    A = np.hstack([A, TotalSend[Node[n].InLink[i], t]])
+                TotalReceive[Node[n].OutLink[j], t] = A.dot(Node[n].Split[:, j])
 
         # Calculate 'available space' at downstream
         # (Step 3 in Kurzhanskiy et al., Eqn 5)
@@ -67,8 +67,6 @@ def CTM(Control, Link, Node, dt, TotalTimeStep):
                 for j in range(len(Node[n].OutLink)):
                     if TotalReceive[Node[n].OutLink[j], t] > 0:
                         AdjustSplitSend[n][i, j, t] = min(TotalReceive[Node[n].OutLink[j], t], Available[Node[n].OutLink[j], t]) / TotalReceive[Node[n].OutLink[j], t] * SplitSend[n][i, j, t]
-                    else:
-                        AdjustSplitSend[n][i, j, t] = 0
 
         # (Step 4 in Kurzhanskiy et al., Eqn 7)
         for n in range(len(Node)):
@@ -106,8 +104,8 @@ def CTM(Control, Link, Node, dt, TotalTimeStep):
             for j in range(len(Node[n].OutLink)):
                 A = np.array([TotalSend[Node[n].InLink[0], t]])
                 for i in range(1, len(Node[n].InLink)):
-                    A = np.vstack([A, TotalSend[Node[n].InLink[i], t]])
-                Inflow[Node[n].OutLink[j], t] = A.reshape(1, -1).dot(Node[n].Split[:, j])
+                    A = np.hstack([A, TotalSend[Node[n].InLink[i], t]])
+                Inflow[Node[n].OutLink[j], t] = A.dot(Node[n].Split[:, j])
 
         for j in range(len(Link)):
             if Link[j].FrNode is None:
@@ -124,23 +122,25 @@ def CTM(Control, Link, Node, dt, TotalTimeStep):
     return Inflow, Outflow, pho
 
 
-def Slice(Link, Node, dt):  # , SignalControl
+def Slice(Link, Node, Signal, dt):
     '''A subroutine to slice links into smaller segments'''
 
-    MaxNumCell = 50       # default maximum number of sub-cells
+    MaxNumCell = 60       # default maximum number of sub-cells
 
     OriginalNumLink = len(Link)
     for i in range(OriginalNumLink):
-        if Link[i].FrNode and Link[i].ToNode:
+        FirstCellLink = len(Link)
+        if Link[i].FrNode is not None and Link[i].ToNode is not None:
             # condition: length of sub-cell has to be greater than distance
             # travelled by free-flow speed times delta_t
-            NumCell = min(MaxNumCell, round(Link[i].Length / (Link[i].V * dt / 3600)))
+            NumCell = min(MaxNumCell, int(Link[i].Length / (Link[i].V * dt / 3600)))
 
-            Node.extend([us.node(InLink=[len(Link) + k], OutLink=[len(Link) + k + 1], Split=[1]) for k in range(NumCell)])
+            Node.extend([us.node(InLink=[len(Link) + k], OutLink=[len(Link) + k + 1], Split=[1]) for k in range(1, NumCell)])
 
-            for k in range(NumCell, -1, -1):
+            for k in range(NumCell, 0, -1):
                 Link.append(deepcopy(Link[i]))
                 Link[-1].FrNode, Link[-1].ToNode = len(Node) - k - 1, len(Node) - k
+                Link[-1].Length /= NumCell
             Link[OriginalNumLink].FrNode = Link[i].FrNode
             Link[-1].ToNode = Link[i].ToNode
 
@@ -148,4 +148,6 @@ def Slice(Link, Node, dt):  # , SignalControl
             LinkTmp = Node[Link[i].ToNode].InLink
             LinkTmp[np.where(LinkTmp == i)] = len(Link) - 1
             LinkTmp = Node[Link[i].FrNode].OutLink
-            LinkTmp[np.where(LinkTmp == i)] = OriginalNumLink
+            LinkTmp[np.where(LinkTmp == i)] = FirstCellLink
+            for sig in Signal:
+                sig.Restricted[np.where(sig.Restricted == i)] = len(Link) - 1
