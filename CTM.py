@@ -85,11 +85,13 @@ def CTM(Control, Link, Node, dt, TotalTimeStep):
                 TuneRatio[Node[n].InLink[i], t] = np.inf
                 for j in range(len(Node[n].OutLink)):
                     if AdjustTotalSend[Node[n].InLink[i], t] * Node[n].Split[i, j] > 0:
-                        r = AdjustSplitSend[n][i, j, t] / (AdjustTotalSend[Node[n].InLink[i], t] * Node[n].Split[i, j])
-                    else:
-                        r = 1
-                    if r < TuneRatio[Node[n].InLink[i], t]:
-                        TuneRatio[Node[n].InLink[i], t] = r
+                        TuneRatio[Node[n].InLink[i], t] = min(TuneRatio[Node[n].InLink[i], t], AdjustSplitSend[n][i, j, t] / (AdjustTotalSend[Node[n].InLink[i], t] * Node[n].Split[i, j]))
+                    #     r = AdjustSplitSend[n][i, j, t] / (AdjustTotalSend[Node[n].InLink[i], t] * Node[n].Split[i, j])
+                    # else:
+                    #     r = 1
+                    # if r < TuneRatio[Node[n].InLink[i], t]:
+                if TuneRatio[Node[n].InLink[i], t] == np.inf:
+                    TuneRatio[Node[n].InLink[i], t] = 0
 
         # Calculate final outflow from each cell
         # (Step 5 in Kurzhanskiy et al., Eqn 8)
@@ -102,9 +104,9 @@ def CTM(Control, Link, Node, dt, TotalTimeStep):
         # (Step 6 in Kurzhanskiy et al., Eqn 9)
         for n in range(len(Node)):
             for j in range(len(Node[n].OutLink)):
-                A = np.array([TotalSend[Node[n].InLink[0], t]])
+                A = np.array([Outflow[Node[n].InLink[0], t]])
                 for i in range(1, len(Node[n].InLink)):
-                    A = np.hstack([A, TotalSend[Node[n].InLink[i], t]])
+                    A = np.hstack([A, Outflow[Node[n].InLink[i], t]])
                 Inflow[Node[n].OutLink[j], t] = A.dot(Node[n].Split[:, j])
 
         for j in range(len(Link)):
@@ -137,11 +139,11 @@ def Slice(Link, Node, Signal, dt):
 
             Node.extend([us.node(InLink=[len(Link) + k], OutLink=[len(Link) + k + 1], Split=[1]) for k in range(1, NumCell)])
 
-            for k in range(NumCell, 0, -1):
+            for k in range(NumCell - 1, -1, -1):
                 Link.append(deepcopy(Link[i]))
                 Link[-1].FrNode, Link[-1].ToNode = len(Node) - k - 1, len(Node) - k
                 Link[-1].Length /= NumCell
-            Link[OriginalNumLink].FrNode = Link[i].FrNode
+            Link[FirstCellLink].FrNode = Link[i].FrNode
             Link[-1].ToNode = Link[i].ToNode
 
             # Modify the Controller and node settings accordingly:

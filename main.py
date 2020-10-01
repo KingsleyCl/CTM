@@ -15,9 +15,11 @@ Control = ControlVector_Webster(len(Link), Signal, TotalTimeStep, Time_SignalPer
 Inflow, Outflow, pho = CTM(Control, Link, Node, 1, TotalTimeStep)
 np.savetxt('pho.csv', pho, delimiter=',', fmt='%f')
 
-# pho = np.loadtxt('pho.csv', delimiter=',')
-# X, Y = np.meshgrid(np.arange(300, 601), np.arange(1 / 120, 1 + 1 / 120, 1 / 120))
-# plt.contourf(X, Y, pho[16:136, 300:601], cmap=plt.cm.Spectral, alpha=0.8)
-X, Y = np.meshgrid(np.arange(pho.shape[1]), np.arange(pho.shape[0]))
-plt.contourf(X, Y, pho, cmap=plt.cm.Spectral, alpha=0.8)
+# figure
+TimeMin, TimeMax = 1500, 1800  # range of time
+LinkMin, LinkMax = 16, 136  # range of links
+LocStep = 1 / (LinkMax - LinkMin)
+X, Y = np.meshgrid(np.arange(TimeMin, TimeMax), np.arange(LocStep, 1 + LocStep, LocStep))
+plt.contourf(X, Y, pho[LinkMin:LinkMax, TimeMin:TimeMax])
+plt.colorbar()
 plt.show()

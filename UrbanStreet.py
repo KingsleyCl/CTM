@@ -31,7 +31,7 @@ class link:
 class signal:
     def __init__(self, Node, Restricted, Condition, Offset, GreenSplit):
         self.Node = int(Node) - 1
-        self.Restricted = np.array(Restricted, dtype=int).reshape(-1, 1) - 1
+        self.Restricted = np.array(Restricted, dtype=int) - 1
         self.Condition = np.array(Condition, dtype=int)
         self.Offset = int(Offset)
         self.GreenSplit = np.array(GreenSplit, dtype=int).reshape(-1, len(Restricted))
