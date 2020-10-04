@@ -1,8 +1,10 @@
 import UrbanStreet as us
 from ControlVector import ControlVector_Webster
-from CTM import CTM, Slice
+from CTM import CTM, CTM_matrix, Slice
+# from CTM_matrix import CTM_matrix, CTM_matrix2, Slice
 import numpy as np
 import matplotlib.pyplot as plt
+from time import time
 
 Time_SignalPeriod = [900, 1800, 900]
 TotalTimeStep = sum(Time_SignalPeriod)
@@ -12,7 +14,10 @@ Node, Link, Signal = us.config('urban data')
 Slice(Link, Node, Signal, 1)
 
 Control = ControlVector_Webster(len(Link), Signal, TotalTimeStep, Time_SignalPeriod, LostTime)
-Inflow, Outflow, pho = CTM(Control, Link, Node, 1, TotalTimeStep)
+
+start = time()
+Inflow, Outflow, pho = CTM_matrix(Control, Link, Node, 1, TotalTimeStep)
+print(time() - start)
 np.savetxt('pho.csv', pho, delimiter=',', fmt='%f')
 
 # figure

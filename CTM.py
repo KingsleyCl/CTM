@@ -124,10 +124,62 @@ def CTM(Control, Link, Node, dt, TotalTimeStep):
     return Inflow, Outflow, pho
 
 
+def CTM_matrix(Control, Link, Node, dt, TotalTimeStep):
+    UpFlow = np.zeros([len(Link), TotalTimeStep])
+    DownFlow = np.zeros([len(Link), TotalTimeStep])
+    pho = np.zeros([len(Link), TotalTimeStep])
+
+    Source = np.array([j for j in range(len(Link)) if Link[j].FrNode is None])
+    Destination = np.array([j for j in range(len(Link)) if Link[j].ToNode is None])
+
+    VVector = np.array([link.V for link in Link])
+    SatFlowVector = np.array([link.SatFlow for link in Link])
+    WVector = np.array([link.W for link in Link])
+    kjamVector = np.array([link.kjam for link in Link])
+    LengthVector = np.array([link.Length for link in Link])
+
+    SplitMatrix = np.zeros([len(Link)] * 2)
+    for node in Node:
+        SplitMatrix[[node.InLink.reshape(-1, 1), node.OutLink]] = node.Split
+
+    for t in range(TotalTimeStep - 1):
+        Available = np.minimum(SatFlowVector, WVector * (kjamVector - pho[:, t]))
+
+        InputDemand = np.minimum(SatFlowVector * Control[:, t], VVector * pho[:, t])
+
+        DemandMatrix = SplitMatrix * InputDemand.reshape(-1, 1)
+
+        OutputDemand = np.sum(DemandMatrix, 0)
+
+        AdjustDemandMatrix = DemandMatrix * np.minimum(np.ones(len(Link)), Available / OutputDemand)
+        AdjustInputDemand = np.zeros(len(Link))
+        for node in Node:
+            AdjustInputDemand[node.InLink] = np.sum(AdjustDemandMatrix[node.InLink.reshape(-1, 1), node.OutLink], 1)
+
+        AdjustMatrix = AdjustDemandMatrix / (SplitMatrix * AdjustInputDemand.reshape(-1, 1))
+        AdjustMatrix[np.isnan(AdjustMatrix)] = np.inf
+        AdjustVector = np.zeros(len(Link))
+        for node in Node:
+            AdjustVector[node.InLink] = np.min(AdjustMatrix[node.InLink.reshape(-1, 1), node.OutLink], 1)
+        AdjustVector[np.isinf(AdjustVector)] = 0
+
+        DownFlow[:, t] = AdjustInputDemand * AdjustVector
+        UpFlow[:, t] = DownFlow[:, t].dot(SplitMatrix)
+
+        for j in Source:
+            k = min(t // 900, len(Link[j].Demand) - 1)
+            UpFlow[j, t] = max(Link[j].Demand[k] + np.sqrt(0.1 * Link[j].Demand[k]) * np.random.randn(1), 0)
+        DownFlow[Destination, t] = np.minimum(SatFlowVector[Destination], VVector[Destination] * pho[Destination, t])
+
+        pho[:, t + 1] = pho[:, t] + (UpFlow[:, t] - DownFlow[:, t]) * (dt / 3600) / LengthVector
+
+    return UpFlow, DownFlow, pho
+
+
 def Slice(Link, Node, Signal, dt):
     '''A subroutine to slice links into smaller segments'''
 
-    MaxNumCell = 60       # default maximum number of sub-cells
+    MaxNumCell = 60  # default maximum number of sub-cells
 
     OriginalNumLink = len(Link)
     for i in range(OriginalNumLink):
