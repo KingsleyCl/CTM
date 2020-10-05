@@ -151,16 +151,15 @@ def CTM_matrix(Control, Link, Node, dt, TotalTimeStep):
 
         OutputDemand = np.sum(DemandMatrix, 0)
 
-        AdjustDemandMatrix = DemandMatrix * np.minimum(np.ones(len(Link)), Available / OutputDemand)
-        AdjustInputDemand = np.zeros(len(Link))
-        for node in Node:
-            AdjustInputDemand[node.InLink] = np.sum(AdjustDemandMatrix[node.InLink.reshape(-1, 1), node.OutLink], 1)
+        AdjustVector = np.minimum(Available, OutputDemand) / OutputDemand
+        AdjustVector[np.where(OutputDemand == 0)] = 0
+        AdjustDemandMatrix = DemandMatrix * AdjustVector
+        AdjustInputDemand = np.sum(AdjustDemandMatrix, 1)
 
         AdjustMatrix = AdjustDemandMatrix / (SplitMatrix * AdjustInputDemand.reshape(-1, 1))
         AdjustMatrix[np.isnan(AdjustMatrix)] = np.inf
         AdjustVector = np.zeros(len(Link))
-        for node in Node:
-            AdjustVector[node.InLink] = np.min(AdjustMatrix[node.InLink.reshape(-1, 1), node.OutLink], 1)
+        AdjustVector = np.min(AdjustMatrix, 1)
         AdjustVector[np.isinf(AdjustVector)] = 0
 
         DownFlow[:, t] = AdjustInputDemand * AdjustVector
