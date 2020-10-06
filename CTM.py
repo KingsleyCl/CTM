@@ -17,6 +17,37 @@ from copy import deepcopy
 import UrbanStreet as us
 
 
+def Slice(Link, Node, Signal, dt):
+    '''A subroutine to slice links into smaller segments'''
+
+    MaxNumCell = 60  # default maximum number of sub-cells
+
+    OriginalNumLink = len(Link)
+    for i in range(OriginalNumLink):
+        FirstCellLink = len(Link)
+        if Link[i].FrNode is not None and Link[i].ToNode is not None:
+            # condition: length of sub-cell has to be greater than distance
+            # travelled by free-flow speed times delta_t
+            NumCell = min(MaxNumCell, int(Link[i].Length / (Link[i].V * dt / 3600)))
+
+            Node.extend([us.node(InLink=[len(Link) + k], OutLink=[len(Link) + k + 1], Split=[1]) for k in range(1, NumCell)])
+
+            for k in range(NumCell - 1, -1, -1):
+                Link.append(deepcopy(Link[i]))
+                Link[-1].FrNode, Link[-1].ToNode = len(Node) - k - 1, len(Node) - k
+                Link[-1].Length /= NumCell
+            Link[FirstCellLink].FrNode = Link[i].FrNode
+            Link[-1].ToNode = Link[i].ToNode
+
+            # Modify the Controller and node settings accordingly:
+            LinkTmp = Node[Link[i].ToNode].InLink
+            LinkTmp[np.where(LinkTmp == i)] = len(Link) - 1
+            LinkTmp = Node[Link[i].FrNode].OutLink
+            LinkTmp[np.where(LinkTmp == i)] = FirstCellLink
+            for sig in Signal:
+                sig.Restricted[np.where(sig.Restricted == i)] = len(Link) - 1
+
+
 def CTM(Control, Link, Node, dt, TotalTimeStep):
     Inflow = np.zeros((len(Link), TotalTimeStep))
     Outflow = np.zeros((len(Link), TotalTimeStep))
@@ -125,12 +156,14 @@ def CTM(Control, Link, Node, dt, TotalTimeStep):
 
 
 def CTM_matrix(Control, Link, Node, dt, TotalTimeStep):
-    UpFlow = np.zeros([len(Link), TotalTimeStep])
-    DownFlow = np.zeros([len(Link), TotalTimeStep])
+    Inflow = np.zeros([len(Link), TotalTimeStep])
+    Outflow = np.zeros([len(Link), TotalTimeStep])
     pho = np.zeros([len(Link), TotalTimeStep])
 
-    Source = np.array([j for j in range(len(Link)) if Link[j].FrNode is None])
-    Destination = np.array([j for j in range(len(Link)) if Link[j].ToNode is None])
+    Source = np.array([i for i, link in enumerate(Link) if link.FrNode is None])
+    Destination = np.array([i for i, link in enumerate(Link) if link.ToNode is None])
+
+    SourceDemandMatrix = np.vstack([Link[i].Demand for i in Source])
 
     VVector = np.array([link.V for link in Link])
     SatFlowVector = np.array([link.SatFlow for link in Link])
@@ -143,64 +176,46 @@ def CTM_matrix(Control, Link, Node, dt, TotalTimeStep):
         SplitMatrix[[node.InLink.reshape(-1, 1), node.OutLink]] = node.Split
 
     for t in range(TotalTimeStep - 1):
-        Available = np.minimum(SatFlowVector, WVector * (kjamVector - pho[:, t]))
+        # Calculate the splitted outflow from each cell without restriction
+        # (Step 1&2 in Kurzhanskiy et al., Eqn 2&3)
+        DemandMatrix = SplitMatrix * np.minimum(SatFlowVector * Control[:, t], VVector * pho[:, t]).reshape(-1, 1)
 
-        InputDemand = np.minimum(SatFlowVector * Control[:, t], VVector * pho[:, t])
-
-        DemandMatrix = SplitMatrix * InputDemand.reshape(-1, 1)
-
+        # Calculate flow reaching each cell without restriction
+        # (Step 2 in Kurzhanskiy et al., Eqn 4)
         OutputDemand = np.sum(DemandMatrix, 0)
 
+        # Calculate 'available space' at downstream
+        # (Step 3 in Kurzhanskiy et al., Eqn 5)
+        Available = np.minimum(SatFlowVector, WVector * (kjamVector - pho[:, t]))
+
+        # Adjusted "Flow" after taking restriction into account
+        # (Step 4 in Kurzhanskiy et al., Eqn 6)
         AdjustVector = np.minimum(Available, OutputDemand) / OutputDemand
         AdjustVector[np.where(OutputDemand == 0)] = 0
         AdjustDemandMatrix = DemandMatrix * AdjustVector
         AdjustInputDemand = np.sum(AdjustDemandMatrix, 1)
 
+        # Calculate final outflow from each cell
+        # (Step 4 in Kurzhanskiy et al., Eqn 7)
         AdjustMatrix = AdjustDemandMatrix / (SplitMatrix * AdjustInputDemand.reshape(-1, 1))
         AdjustMatrix[np.isnan(AdjustMatrix)] = np.inf
-        AdjustVector = np.zeros(len(Link))
+        # (Step 5 in Kurzhanskiy et al., Eqn 8)
         AdjustVector = np.min(AdjustMatrix, 1)
         AdjustVector[np.isinf(AdjustVector)] = 0
+        Outflow[:, t] = AdjustInputDemand * AdjustVector
 
-        DownFlow[:, t] = AdjustInputDemand * AdjustVector
-        UpFlow[:, t] = DownFlow[:, t].dot(SplitMatrix)
+        # Calculate inflow to each cell (except sources)
+        # (Step 6 in Kurzhanskiy et al., Eqn 9)
+        Inflow[:, t] = Outflow[:, t].dot(SplitMatrix)
 
-        for j in Source:
-            k = min(t // 900, len(Link[j].Demand) - 1)
-            UpFlow[j, t] = max(Link[j].Demand[k] + np.sqrt(0.1 * Link[j].Demand[k]) * np.random.randn(1), 0)
-        DownFlow[Destination, t] = np.minimum(SatFlowVector[Destination], VVector[Destination] * pho[Destination, t])
+        # Calculate source inflow to each cell
+        k = min(t // 900, SourceDemandMatrix.shape[1] - 1)
+        Inflow[Source, t] = np.maximum(SourceDemandMatrix[:, k] + np.sqrt(0.1 * SourceDemandMatrix[:, k]) * np.random.randn(SourceDemandMatrix.shape[0]), 0)
 
-        pho[:, t + 1] = pho[:, t] + (UpFlow[:, t] - DownFlow[:, t]) * (dt / 3600) / LengthVector
+        # Calculate destination outflow to each cell
+        Outflow[Destination, t] = np.minimum(SatFlowVector[Destination], VVector[Destination] * pho[Destination, t])
 
-    return UpFlow, DownFlow, pho
+        # Update density (Eqn 10 in Kurzhanski et al.)
+        pho[:, t + 1] = pho[:, t] + (Inflow[:, t] - Outflow[:, t]) * (dt / 3600) / LengthVector
 
-
-def Slice(Link, Node, Signal, dt):
-    '''A subroutine to slice links into smaller segments'''
-
-    MaxNumCell = 60  # default maximum number of sub-cells
-
-    OriginalNumLink = len(Link)
-    for i in range(OriginalNumLink):
-        FirstCellLink = len(Link)
-        if Link[i].FrNode is not None and Link[i].ToNode is not None:
-            # condition: length of sub-cell has to be greater than distance
-            # travelled by free-flow speed times delta_t
-            NumCell = min(MaxNumCell, int(Link[i].Length / (Link[i].V * dt / 3600)))
-
-            Node.extend([us.node(InLink=[len(Link) + k], OutLink=[len(Link) + k + 1], Split=[1]) for k in range(1, NumCell)])
-
-            for k in range(NumCell - 1, -1, -1):
-                Link.append(deepcopy(Link[i]))
-                Link[-1].FrNode, Link[-1].ToNode = len(Node) - k - 1, len(Node) - k
-                Link[-1].Length /= NumCell
-            Link[FirstCellLink].FrNode = Link[i].FrNode
-            Link[-1].ToNode = Link[i].ToNode
-
-            # Modify the Controller and node settings accordingly:
-            LinkTmp = Node[Link[i].ToNode].InLink
-            LinkTmp[np.where(LinkTmp == i)] = len(Link) - 1
-            LinkTmp = Node[Link[i].FrNode].OutLink
-            LinkTmp[np.where(LinkTmp == i)] = FirstCellLink
-            for sig in Signal:
-                sig.Restricted[np.where(sig.Restricted == i)] = len(Link) - 1
+    return Inflow, Outflow, pho

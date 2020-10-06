@@ -1,7 +1,7 @@
 import numpy as np
 
 
-def ControlVector_Webster(LenLink, SignalControl, TotalTimeStep, Time_SignalPeriod, LostTime):
+def ControlVector_Webster(LenLink, Signal, TotalTimeStep, Time_SignalPeriod, LostTime):
     '''
     Control vector
     binary: 0 - RED 1-GREEN
@@ -10,7 +10,7 @@ def ControlVector_Webster(LenLink, SignalControl, TotalTimeStep, Time_SignalPeri
     '''
     Control = np.ones((LenLink, TotalTimeStep))  # Initialization
 
-    for sig in SignalControl:
+    for sig in Signal:
         ControlVector = np.array([]).reshape(-1, 2)  # Initialize the Control vector of each signal
 
         for j in range(sig.GreenSplit.shape[0]):
@@ -27,14 +27,9 @@ def ControlVector_Webster(LenLink, SignalControl, TotalTimeStep, Time_SignalPeri
 
             CycleList = np.vstack([OffSetSignal, np.tile(Cycle, (CycleNum, 1))])  # Record the overall signal of each demand level
 
-            # StartTime = (CycleTime - sig.Offset % CycleTime) % CycleTime  # determine the start time including the offset period
-            # StartTime = OffSetSignal.shape[0] - sig.Offset  # determine the start time including the offset period
-            # EndTime = StartTime + Time_SignalPeriod[j]
-
             ControlVector = np.vstack([ControlVector, CycleList[:Time_SignalPeriod[j], :]])  # Integrate the offset thread
 
         Control[sig.Restricted[0], :] = ControlVector[:, 0]
         Control[sig.Restricted[1], :] = ControlVector[:, 1]
 
-    # np.savetxt('control.csv', Control, fmt='%d', delimiter=',')
     return Control

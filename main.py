@@ -1,7 +1,6 @@
-import UrbanStreet as us
+from UrbanStreet import config
 from ControlVector import ControlVector_Webster
-from CTM import CTM, CTM_matrix, Slice
-# from CTM_matrix import CTM_matrix, CTM_matrix2, Slice
+from CTM import CTM_matrix, Slice
 import numpy as np
 import matplotlib.pyplot as plt
 from time import time
@@ -10,7 +9,7 @@ Time_SignalPeriod = [900, 1800, 900]
 TotalTimeStep = sum(Time_SignalPeriod)
 LostTime = 5
 
-Node, Link, Signal = us.config('urban data')
+Node, Link, Signal = config('urban data')
 Slice(Link, Node, Signal, 1)
 
 Control = ControlVector_Webster(len(Link), Signal, TotalTimeStep, Time_SignalPeriod, LostTime)
@@ -18,7 +17,6 @@ Control = ControlVector_Webster(len(Link), Signal, TotalTimeStep, Time_SignalPer
 start = time()
 Inflow, Outflow, pho = CTM_matrix(Control, Link, Node, 1, TotalTimeStep)
 print(time() - start)
-np.savetxt('pho.csv', pho, delimiter=',', fmt='%f')
 
 # figure
 TimeMin, TimeMax = 1500, 1800  # range of time

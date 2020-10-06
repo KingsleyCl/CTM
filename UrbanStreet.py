@@ -6,7 +6,6 @@ class node:
         self.InLink = np.array(InLink, dtype=int) - 1
         self.OutLink = np.array(OutLink, dtype=int) - 1
         self.Split = np.array(Split, dtype=float).reshape((len(InLink), len(OutLink)))
-        # self.Signal = Signal
 
 
 class link:
@@ -38,35 +37,16 @@ class signal:
 
 
 def config(folder):
-    # NodeData = pd.read_excel(file, sheet_name='Node', index_col=0)
-    # NodeData.head()
+    # read Node
+    Data = np.loadtxt(folder + '/node.csv', dtype=str, delimiter=',', skiprows=1)
+    Node = [node(line[1].split(';'), line[2].split(';'), line[3].split(';')) for line in Data]
 
-    def readNode():
-        # read Node
-        Data = np.loadtxt(folder + '/node.csv', dtype=str, delimiter=',', skiprows=1)
-        Node = []
-        for line in Data:
-            InLink, OutLink, Split = line[1].split(';'), line[2].split(';'), line[3].split(';')
-            Node.append(node(InLink, OutLink, Split))
-        return Node
+    # read Link
+    Data = np.loadtxt(folder + '/link.csv', dtype=str, delimiter=',', skiprows=1)
+    Link = [link(*line[1:7], line[7].split(';')) for line in Data]
 
-    def readLink():
-        # read Link
-        Data = np.loadtxt(folder + '/link.csv', dtype=str, delimiter=',', skiprows=1)
-        Link = []
-        for line in Data:
-            FrNode, ToNode, Length, V, SatFlow, kjam = line[1:7]
-            Demand = line[7].split(';')
-            Link.append(link(FrNode, ToNode, Length, V, SatFlow, kjam, Demand))
-        return Link
+    # read signal
+    Data = np.loadtxt(folder + '/signal.csv', dtype=str, delimiter=',', skiprows=1)
+    Signal = [signal(line[1], line[2].split(';'), line[3].split(';'), line[4], line[5].split(';')) for line in Data]
 
-    def readSignal():
-        # read signal
-        Data = np.loadtxt(folder + '/signal.csv', dtype=str, delimiter=',', skiprows=1)
-        Signal = []
-        for line in Data:
-            Node, Restricted, Condition, Offset, GreenSplit = line[1], line[2].split(';'), line[3].split(';'), line[4], line[5].split(';')
-            Signal.append(signal(Node, Restricted, Condition, Offset, GreenSplit))
-        return Signal
-
-    return readNode(), readLink(), readSignal()
+    return Node, Link, Signal
