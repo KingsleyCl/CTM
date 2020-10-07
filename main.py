@@ -1,5 +1,4 @@
-from UrbanStreet import config
-from ControlVector import ControlVector_Webster
+from UrbanStreet import config, ControlVector_Webster
 from CTM import CTM_matrix, Slice
 import numpy as np
 import matplotlib.pyplot as plt

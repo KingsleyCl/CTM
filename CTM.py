@@ -14,7 +14,7 @@ Initialize matrics
 '''
 import numpy as np
 from copy import deepcopy
-import UrbanStreet as us
+from UrbanStreet import node
 
 
 def Slice(Link, Node, Signal, dt):
@@ -30,7 +30,7 @@ def Slice(Link, Node, Signal, dt):
             # travelled by free-flow speed times delta_t
             NumCell = min(MaxNumCell, int(Link[i].Length / (Link[i].V * dt / 3600)))
 
-            Node.extend([us.node(InLink=[len(Link) + k], OutLink=[len(Link) + k + 1], Split=[1]) for k in range(1, NumCell)])
+            Node.extend([node(InLink=[len(Link) + k], OutLink=[len(Link) + k + 1], Split=[1]) for k in range(1, NumCell)])
 
             for k in range(NumCell - 1, -1, -1):
                 Link.append(deepcopy(Link[i]))
@@ -173,7 +173,7 @@ def CTM_matrix(Control, Link, Node, dt, TotalTimeStep):
 
     SplitMatrix = np.zeros([len(Link)] * 2)
     for node in Node:
-        SplitMatrix[[node.InLink.reshape(-1, 1), node.OutLink]] = node.Split
+        SplitMatrix[(node.InLink.reshape(-1, 1), node.OutLink)] = node.Split
 
     for t in range(TotalTimeStep - 1):
         # Calculate the splitted outflow from each cell without restriction
@@ -190,15 +190,20 @@ def CTM_matrix(Control, Link, Node, dt, TotalTimeStep):
 
         # Adjusted "Flow" after taking restriction into account
         # (Step 4 in Kurzhanskiy et al., Eqn 6)
-        AdjustVector = np.minimum(Available, OutputDemand) / OutputDemand
+        AdjustVector = np.minimum(Available, OutputDemand)
+        notZero = np.where(OutputDemand != 0)
+        AdjustVector[notZero] /= OutputDemand[notZero]
         AdjustVector[np.where(OutputDemand == 0)] = 0
         AdjustDemandMatrix = DemandMatrix * AdjustVector
         AdjustInputDemand = np.sum(AdjustDemandMatrix, 1)
 
         # Calculate final outflow from each cell
         # (Step 4 in Kurzhanskiy et al., Eqn 7)
-        AdjustMatrix = AdjustDemandMatrix / (SplitMatrix * AdjustInputDemand.reshape(-1, 1))
-        AdjustMatrix[np.isnan(AdjustMatrix)] = np.inf
+        AdjustMatrix = AdjustDemandMatrix
+        Divisor = SplitMatrix * AdjustInputDemand.reshape(-1, 1)
+        notZero = np.where(Divisor != 0)
+        AdjustMatrix[notZero] /= Divisor[notZero]
+        AdjustMatrix[np.where(Divisor == 0)] = np.inf
         # (Step 5 in Kurzhanskiy et al., Eqn 8)
         AdjustVector = np.min(AdjustMatrix, 1)
         AdjustVector[np.isinf(AdjustVector)] = 0
