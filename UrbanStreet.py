@@ -36,17 +36,21 @@ class signal:
         self.GreenSplit = np.array(GreenSplit, dtype=int).reshape(-1, len(Restricted))
 
 
-def config(folder):
+def config(file):
+    import pandas as pd
     # read Node
-    Data = np.loadtxt(folder + '/node.csv', dtype=str, delimiter=',', skiprows=1)
-    Node = [node(line[1].split(';'), line[2].split(';'), line[3].split(';')) for line in Data]
+    data = pd.read_excel(file, sheet_name=0, index_col=0, header=0, skiprows=0, dtype=str)
+    Node = []
+    data.apply(lambda x: Node.append(node(x[0].split(';'), x[1].split(';'), x[2].split(';'))), 1)
 
     # read Link
-    Data = np.loadtxt(folder + '/link.csv', dtype=str, delimiter=',', skiprows=1)
-    Link = [link(*line[1:7], line[7].split(';')) for line in Data]
+    data = pd.read_excel(file, sheet_name=1, index_col=0, header=0, skiprows=0, dtype=str)
+    Link = []
+    data.apply(lambda x: Link.append(link(*x[:6], x[6].split(';'))), 1)
 
     # read signal
-    Data = np.loadtxt(folder + '/signal.csv', dtype=str, delimiter=',', skiprows=1)
-    Signal = [signal(line[1], line[2].split(';'), line[3].split(';'), line[4], line[5].split(';')) for line in Data]
+    data = pd.read_excel(file, sheet_name=2, index_col=0, header=0, skiprows=0, dtype=str)
+    Signal = []
+    data.apply(lambda x: Signal.append(signal(x[0], x[1].split(';'), x[2].split(';'), x[3], x[4].split(';'))), 1)
 
     return Node, Link, Signal

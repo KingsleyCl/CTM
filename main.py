@@ -9,7 +9,7 @@ Time_SignalPeriod = [900, 1800, 900]
 TotalTimeStep = sum(Time_SignalPeriod)
 LostTime = 5
 
-Node, Link, Signal = config('urban data')
+Node, Link, Signal = config('UrbanConfig_TCR.xlsx')
 Slice(Link, Node, Signal, 1)
 
 Control = ControlVector_Webster(len(Link), Signal, TotalTimeStep, Time_SignalPeriod, LostTime)
