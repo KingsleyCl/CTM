@@ -113,16 +113,10 @@ def CTM(Control, Link, Node, dt, TotalTimeStep):
         # (Step 5 in Kurzhanskiy et al., Eqn 8)
         for n in range(len(Node)):
             for i in range(len(Node[n].InLink)):
-                TuneRatio[Node[n].InLink[i], t] = np.inf
+                TuneRatio[Node[n].InLink[i], t] = 1
                 for j in range(len(Node[n].OutLink)):
                     if AdjustTotalSend[Node[n].InLink[i], t] * Node[n].Split[i, j] > 0:
                         TuneRatio[Node[n].InLink[i], t] = min(TuneRatio[Node[n].InLink[i], t], AdjustSplitSend[n][i, j, t] / (AdjustTotalSend[Node[n].InLink[i], t] * Node[n].Split[i, j]))
-                    #     r = AdjustSplitSend[n][i, j, t] / (AdjustTotalSend[Node[n].InLink[i], t] * Node[n].Split[i, j])
-                    # else:
-                    #     r = 1
-                    # if r < TuneRatio[Node[n].InLink[i], t]:
-                if TuneRatio[Node[n].InLink[i], t] == np.inf:
-                    TuneRatio[Node[n].InLink[i], t] = 0
 
         # Calculate final outflow from each cell
         # (Step 5 in Kurzhanskiy et al., Eqn 8)
@@ -198,11 +192,9 @@ def CTM_matrix(Control, Link, Node, dt, TotalTimeStep):
         # Calculate final outflow from each cell
         # (Step 4 in Kurzhanskiy et al., Eqn 7)
         AdjustMatrix = AdjustDemandMatrix / (SplitMatrix * AdjustInputDemand.reshape(-1, 1))
-        AdjustMatrix[np.isnan(AdjustMatrix)] = np.inf
+        AdjustMatrix[np.isnan(AdjustMatrix)] = 1
         # (Step 5 in Kurzhanskiy et al., Eqn 8)
-        AdjustVector = np.min(AdjustMatrix, 1)
-        AdjustVector[np.isinf(AdjustVector)] = 0
-        Outflow[:, t] = AdjustInputDemand * AdjustVector
+        Outflow[:, t] = AdjustInputDemand * np.min(AdjustMatrix, 1)
 
         # Calculate inflow to each cell (except sources)
         # (Step 6 in Kurzhanskiy et al., Eqn 9)
