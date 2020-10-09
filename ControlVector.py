@@ -1,7 +1,7 @@
 import numpy as np
 
 
-def ControlVector_Webster(LenLink, Signal, TotalTimeStep, Time_SignalPeriod, LostTime):
+def ControlVector_Webster(Signal, LenLink, TotalTimeStep, Time_SignalPeriod, LostTime):
     '''
     Control vector
     binary: 0 - RED 1-GREEN

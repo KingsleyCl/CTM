@@ -39,17 +39,17 @@ class signal:
 def config(file):
     import pandas as pd
     # read Node
-    data = pd.read_excel(file, sheet_name=0, index_col=0, header=0, skiprows=0, dtype=str)
+    data = pd.read_excel(file, sheet_name='Node', index_col=0, header=0, skiprows=0, dtype=str)
     Node = []
     data.apply(lambda x: Node.append(node(x[0].split(';'), x[1].split(';'), x[2].split(';'))), 1)
 
     # read Link
-    data = pd.read_excel(file, sheet_name=1, index_col=0, header=0, skiprows=0, dtype=str)
+    data = pd.read_excel(file, sheet_name='Link', index_col=0, header=0, skiprows=0, dtype=str)
     Link = []
     data.apply(lambda x: Link.append(link(*x[:6], x[6].split(';'))), 1)
 
     # read signal
-    data = pd.read_excel(file, sheet_name=2, index_col=0, header=0, skiprows=0, dtype=str)
+    data = pd.read_excel(file, sheet_name='SignalControl', index_col=0, header=0, skiprows=0, dtype=str)
     Signal = []
     data.apply(lambda x: Signal.append(signal(x[0], x[1].split(';'), x[2].split(';'), x[3], x[4].split(';'))), 1)
 

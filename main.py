@@ -12,11 +12,12 @@ LostTime = 5
 Node, Link, Signal = config('UrbanConfig_TCR.xlsx')
 Slice(Link, Node, Signal, 1)
 
-Control = ControlVector_Webster(len(Link), Signal, TotalTimeStep, Time_SignalPeriod, LostTime)
+Control = ControlVector_Webster(Signal, len(Link), TotalTimeStep, Time_SignalPeriod, LostTime)
 
-start = time()
+clock = time()
 Inflow, Outflow, pho = CTM_matrix(Control, Link, Node, 1, TotalTimeStep)
-print(time() - start)
+clock = time() - clock
+print(f'Time of CTM: {round(clock, 3)} seconds')
 
 # figure
 TimeMin, TimeMax = 1500, 1800  # range of time
